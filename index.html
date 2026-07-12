@@ -381,7 +381,7 @@ const POTENCIA_REFERENCIA_GAUGE = 3000; // watts que preenchem 100% do gauge de 
 // NÃO PRECISA MEXER DAQUI PRA BAIXO
 // ============================================================
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 document.getElementById('deviceLabel').textContent = DEVICE_ID;
 
 let tarifaAtual = parseFloat(document.getElementById('tarifaInput').value);
@@ -394,7 +394,7 @@ let ultimoKwhHoje = 0;
 let deviceMeta = { num_fases: 1, tipo_instalacao: 'residencial', demanda_contratada_kw: null };
 
 async function carregarMetaDispositivo() {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('devices').select('*').eq('device_id', DEVICE_ID).limit(1);
 
   if (!error && data && data.length > 0) {
@@ -469,7 +469,7 @@ function atualizarGaugeCusto() {
 }
 
 async function carregarUltimaLeitura() {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from(SUPABASE_TABLE).select('*').eq('device_id', DEVICE_ID)
     .order('created_at', { ascending: false }).limit(1);
 
@@ -519,7 +519,7 @@ async function carregarUltimaLeitura() {
 async function carregarPeriodo(diasAtras) {
   const desde = new Date();
   desde.setDate(desde.getDate() - diasAtras);
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from(SUPABASE_TABLE).select('*').eq('device_id', DEVICE_ID)
     .gte('created_at', desde.toISOString()).order('created_at', { ascending: true });
   return error ? [] : (data || []);
@@ -584,7 +584,7 @@ async function atualizarGraficoAno() {
   const desde = new Date();
   desde.setMonth(desde.getMonth() - 12);
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('consumo_diario')
     .select('data, kwh_total')
     .eq('device_id', DEVICE_ID)
