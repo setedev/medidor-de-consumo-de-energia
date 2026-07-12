@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedeLuz</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root {
+    --bg: #0a1210;
+    --panel: #101a17;
+    --panel-2: #142019;
+    --border: #1e2c26;
+    --text: #eef4f1;
+    --text-dim: #7f9089;
+    --emerald: #34d399;
+    --emerald-dim: #163d2c;
+    --amber: #fbbf24;
+    --amber-dim: #3d2f0f;
+    --lime: #a3e635;
+    --red: #f87171;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background:
+      radial-gradient(circle at 15% 0%, #0f1e18 0%, transparent 45%),
+      radial-gradient(circle at 90% 10%, #14251c 0%, transparent 40%),
+      var(--bg);
+    color: var(--text);
+    font-family: 'Manrope', sans-serif;
+    padding: 20px 16px 40px;
+    min-height: 100vh;
+  }
+
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .brand { display: flex; align-items: center; gap: 10px; }
+
+  .brand .bolt {
+    width: 34px; height: 34px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--emerald), #10b981);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 0 18px #34d39955;
+  }
+
+  .brand h1 {
+    font-family: 'Sora', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .brand h1 .sub { display: block; font-size: 11px; font-weight: 500; color: var(--text-dim); font-family: 'Manrope', sans-serif; }
+
+  .status-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex; align-items: center; gap: 7px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 7px 12px;
+    border-radius: 999px;
+  }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
+  .dot.online { background: var(--emerald); box-shadow: 0 0 8px var(--emerald); animation: pulse 2s infinite; }
+  .dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ---------- ALERTA DE PICO ---------- */
+  .peak-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(90deg, var(--amber-dim), transparent);
+    border: 1px solid #4a3c14;
+    border-left: 3px solid var(--amber);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    font-size: 13px;
+  }
+  .peak-banner.show { display: flex; }
+  .peak-banner .icon { font-size: 16px; }
+  .peak-banner b { color: var(--amber); font-family: 'JetBrains Mono', monospace; }
+
+  /* ---------- GAUGES ---------- */
+  .gauge-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 560px) { .gauge-row { grid-template-columns: 1fr; } }
+
+  .gauge-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .gauge-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-dim);
+    align-self: flex-start;
+  }
+
+  .gauge-ring {
+    position: relative;
+    width: 168px; height: 168px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .gauge-ring::before {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(var(--ring-color) calc(var(--pct) * 1%), #1c2822 0);
+    mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
+    transition: background 0.6s ease;
+  }
+
+  .gauge-center { text-align: center; z-index: 1; }
+  .gauge-center .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .gauge-center .unit { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  .gauge-foot {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+  .gauge-foot b { color: var(--text); }
+
+  /* ---------- CARDS ---------- */
+  .grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+  }
+
+  .panel-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-title .tag { color: var(--lime); font-size: 13px; }
+
+  canvas { max-height: 210px; }
+
+  /* ---------- TARIFA (config rápida) ---------- */
+  .tarifa-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .tarifa-row input {
+    width: 62px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--emerald);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 4px 6px;
+    text-align: center;
+  }
+
+  .fases-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .fase-box {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  .fase-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+  .fase-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--emerald);
+  }
+
+  .chart-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .mini-btn {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .mini-btn:hover { color: var(--emerald); border-color: var(--emerald); }
+
+  footer {
+    margin-top: 22px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="bolt">⚡</div>
+      <h1>MedeLuz<span class="sub" id="deviceLabel">carregando dispositivo...</span></h1>
+    </div>
+    <div class="status-pill">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">conectando...</span>
+    </div>
+  </header>
+
+  <div class="peak-banner" id="peakBanner">
+    <span class="icon">⚠️</span>
+    <span>Pico de hoje: <b id="peakValue">--</b> às <b id="peakTime">--</b></span>
+  </div>
+
+  <div class="peak-banner" id="demandaBanner" style="border-left-color: var(--red); border-color:#4a1414; background: linear-gradient(90deg, #3d1414, transparent);">
+    <span class="icon">🚨</span>
+    <span>Demanda contratada: <b id="demandaValue" style="color:var(--red);">--</b> — consumo atual está em <b id="demandaPct" style="color:var(--red);">--</b> do contrato</span>
+  </div>
+
+  <div class="panel" id="fasesPanel" style="display:none; margin-bottom:14px;">
+    <div class="panel-title"><span>Corrente por fase</span><span class="tag" id="tipoInstalacaoTag">--</span></div>
+    <div class="fases-row">
+      <div class="fase-box"><div class="fase-label">Fase R</div><div class="fase-val" id="faseR">-- A</div></div>
+      <div class="fase-box"><div class="fase-label">Fase S</div><div class="fase-val" id="faseS">-- A</div></div>
+      <div class="fase-box"><div class="fase-label">Fase T</div><div class="fase-val" id="faseT">-- A</div></div>
+    </div>
+  </div>
+
+  <div class="gauge-row">
+    <div class="gauge-card">
+      <div class="gauge-title">Consumo agora</div>
+      <div class="gauge-ring" id="ringPower" style="--pct:0; --ring-color: var(--emerald);">
+        <div class="gauge-center">
+          <div class="val" id="gaugePowerVal">--</div>
+          <div class="unit">watts</div>
+        </div>
+      </div>
+      <div class="gauge-foot"><b id="gaugeCurrent">-- A</b> de corrente</div>
+    </div>
+
+    <div class="gauge-card">
+      <div class="gauge-title">Custo estimado hoje</div>
+      <div class="gauge-ring" id="ringCusto" style="--pct:0; --ring-color: var(--amber);">
+        <div class="gauge-center">
+          <div class="val" id="gaugeCustoVal">R$ --</div>
+          <div class="unit" id="gaugeKwhVal">-- kWh</div>
+        </div>
+      </div>
+      <div class="gauge-foot tarifa-row">
+        tarifa: R$ <input type="number" id="tarifaInput" value="0.94669" step="0.00001" min="0"> /kWh
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-title"><span>Consumo — hoje</span><span class="tag" id="todayTotal">-- kWh</span></div>
+      <canvas id="chartDia"></canvas>
+      <div class="chart-actions">
+        <button class="mini-btn" onclick="exportarGrafico('chartDia', 'consumo-hoje')">Baixar imagem</button>
+        <button class="mini-btn" onclick="compartilharGrafico('chartDia', 'consumo-hoje')">Compartilhar</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span>Consumo — últimos 7 dias</span><span class="tag" id="weekTotal">-- kWh</span></div>
+      <canvas id="chartSemana"></canvas>
+      <div class="chart-actions">
+        <button class="mini-btn" onclick="exportarGrafico('chartSemana', 'consumo-semana')">Baixar imagem</button>
+        <button class="mini-btn" onclick="compartilharGrafico('chartSemana', 'consumo-semana')">Compartilhar</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span>Consumo — últimos 30 dias</span><span class="tag" id="monthTotal">-- kWh</span></div>
+      <canvas id="chartMes"></canvas>
+      <div class="chart-actions">
+        <button class="mini-btn" onclick="exportarGrafico('chartMes', 'consumo-mes')">Baixar imagem</button>
+        <button class="mini-btn" onclick="compartilharGrafico('chartMes', 'consumo-mes')">Compartilhar</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span>Consumo — últimos 12 meses</span><span class="tag" id="yearTotal">-- kWh</span></div>
+      <canvas id="chartAno"></canvas>
+      <div class="chart-actions">
+        <button class="mini-btn" onclick="exportarGrafico('chartAno', 'consumo-ano')">Baixar imagem</button>
+        <button class="mini-btn" onclick="compartilharGrafico('chartAno', 'consumo-ano')">Compartilhar</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>ATUALIZA A CADA 15S · MEDELUZ</footer>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURAÇÕES — EDITE AQUI
+// ============================================================
+const SUPABASE_URL = "https://udyoxxovwqnjtepzifww.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkeW94eG92d3FuanRlcHppZnd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3ODM5ODIsImV4cCI6MjA5OTM1OTk4Mn0.azMjKZTw2dAZyC0ls7q7BVFRyMW7xXRH2BzxqCeFwHs";
+const SUPABASE_TABLE = "readings";
+// Lê o device_id direto da URL (ex: seusite.com/dashboard?id=Teste01)
+// Assim cada cliente recebe um link próprio, sem precisar editar nenhum arquivo.
+// Se não vier nada na URL, usa o valor padrão abaixo (útil só pra teste local).
+const parametrosURL = new URLSearchParams(window.location.search);
+const DEVICE_ID = parametrosURL.get('id') || "Teste01";
+const POTENCIA_REFERENCIA_GAUGE = 3000; // watts que preenchem 100% do gauge de "consumo agora" (ajuste pro seu disjuntor)
+
+// ============================================================
+// NÃO PRECISA MEXER DAQUI PRA BAIXO
+// ============================================================
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+document.getElementById('deviceLabel').textContent = DEVICE_ID;
+
+let tarifaAtual = parseFloat(document.getElementById('tarifaInput').value);
+document.getElementById('tarifaInput').addEventListener('input', (e) => {
+  tarifaAtual = parseFloat(e.target.value) || 0;
+  atualizarGaugeCusto();
+});
+
+let ultimoKwhHoje = 0;
+let deviceMeta = { num_fases: 1, tipo_instalacao: 'residencial', demanda_contratada_kw: null };
+
+async function carregarMetaDispositivo() {
+  const { data, error } = await supabase
+    .from('devices').select('*').eq('device_id', DEVICE_ID).limit(1);
+
+  if (!error && data && data.length > 0) {
+    deviceMeta = data[0];
+    if (deviceMeta.tarifa_kwh) {
+      tarifaAtual = parseFloat(deviceMeta.tarifa_kwh);
+      document.getElementById('tarifaInput').value = tarifaAtual;
+    }
+  }
+
+  const label = deviceMeta.tipo_instalacao === 'industrial' ? 'Indústria'
+              : deviceMeta.tipo_instalacao === 'comercial' ? 'Comercial'
+              : 'Residencial';
+  document.getElementById('tipoInstalacaoTag').textContent = `${label} · ${deviceMeta.num_fases}φ`;
+
+  if (deviceMeta.num_fases === 3) {
+    document.getElementById('fasesPanel').style.display = 'block';
+  }
+}
+
+const chartConfigBase = {
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#7f9089', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: '#1e2c26' } },
+      y: { ticks: { color: '#7f9089', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: '#1e2c26' },
+           title: { display: true, text: 'Watts', color: '#7f9089', font: { size: 10 } } }
+    }
+  }
+};
+
+function criarGrafico(canvasId, tipo) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  return new Chart(ctx, {
+    ...chartConfigBase,
+    type: tipo,
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        borderColor: '#34d399',
+        backgroundColor: tipo === 'bar' ? '#34d39944' : '#34d39922',
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: tipo === 'line',
+        tension: 0.35
+      }]
+    }
+  });
+}
+
+const chartDia = criarGrafico('chartDia', 'bar');
+const chartSemana = criarGrafico('chartSemana', 'bar');
+const chartMes = criarGrafico('chartMes', 'bar');
+const chartAno = criarGrafico('chartAno', 'bar');
+chartAno.options.scales.y.title.text = 'kWh por mês';
+
+function formatarHora(iso) { return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+function formatarDia(iso) { return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }); }
+function estimarKwh(leituras, intervaloSegundos) {
+  return leituras.reduce((acc, r) => acc + (r.power_w * intervaloSegundos / 3600 / 1000), 0);
+}
+
+function atualizarGaugeCusto() {
+  const custo = ultimoKwhHoje * tarifaAtual;
+  document.getElementById('gaugeCustoVal').textContent = `R$ ${custo.toFixed(2)}`;
+  document.getElementById('gaugeKwhVal').textContent = `${ultimoKwhHoje.toFixed(2)} kWh`;
+  const pct = Math.min((custo / 15) * 100, 100); // referência: R$15/dia = anel cheio
+  document.getElementById('ringCusto').style.setProperty('--pct', pct.toFixed(0));
+}
+
+async function carregarUltimaLeitura() {
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE).select('*').eq('device_id', DEVICE_ID)
+    .order('created_at', { ascending: false }).limit(1);
+
+  if (error || !data || data.length === 0) {
+    document.getElementById('statusDot').className = 'dot offline';
+    document.getElementById('statusText').textContent = 'sem dados ainda';
+    return;
+  }
+
+  const u = data[0];
+  document.getElementById('gaugePowerVal').textContent = u.power_w.toFixed(0);
+  document.getElementById('gaugeCurrent').textContent = `${u.current_a.toFixed(2)} A`;
+  const pctPower = Math.min((u.power_w / POTENCIA_REFERENCIA_GAUGE) * 100, 100);
+  document.getElementById('ringPower').style.setProperty('--pct', pctPower.toFixed(0));
+
+  const minutos = (Date.now() - new Date(u.created_at)) / 60000;
+  if (minutos < 5) {
+    document.getElementById('statusDot').className = 'dot online';
+    document.getElementById('statusText').textContent = 'online';
+  } else {
+    document.getElementById('statusDot').className = 'dot offline';
+    document.getElementById('statusText').textContent = 'offline';
+  }
+
+  // Fases (só aparece se o dispositivo for trifásico)
+  if (u.num_fases === 3) {
+    document.getElementById('faseR').textContent = `${(u.current_r ?? 0).toFixed(2)} A`;
+    document.getElementById('faseS').textContent = `${(u.current_s ?? 0).toFixed(2)} A`;
+    document.getElementById('faseT').textContent = `${(u.current_t ?? 0).toFixed(2)} A`;
+  }
+
+  // Alerta de demanda contratada (só clientes Grupo A com esse dado cadastrado)
+  const demandaKw = deviceMeta.demanda_contratada_kw;
+  if (demandaKw && demandaKw > 0) {
+    const consumoKw = u.power_w / 1000;
+    const pctDemanda = (consumoKw / demandaKw) * 100;
+    document.getElementById('demandaValue').textContent = `${demandaKw} kW`;
+    document.getElementById('demandaPct').textContent = `${pctDemanda.toFixed(0)}%`;
+    if (pctDemanda >= 80) {
+      document.getElementById('demandaBanner').classList.add('show');
+    } else {
+      document.getElementById('demandaBanner').classList.remove('show');
+    }
+  }
+}
+
+async function carregarPeriodo(diasAtras) {
+  const desde = new Date();
+  desde.setDate(desde.getDate() - diasAtras);
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE).select('*').eq('device_id', DEVICE_ID)
+    .gte('created_at', desde.toISOString()).order('created_at', { ascending: true });
+  return error ? [] : (data || []);
+}
+
+const INTERVALO_LEITURA_SEGUNDOS = 15; // precisa bater com o INTERVALO_ENVIO do firmware
+
+function agruparPorDia(leituras) {
+  const grupos = {};
+  leituras.forEach(r => {
+    const dia = r.created_at.split('T')[0];
+    if (!grupos[dia]) grupos[dia] = { somaW: 0, count: 0, kwh: 0 };
+    grupos[dia].somaW += r.power_w;
+    grupos[dia].count += 1;
+    grupos[dia].kwh += r.power_w * INTERVALO_LEITURA_SEGUNDOS / 3600 / 1000;
+  });
+  const resultado = {};
+  Object.keys(grupos).sort().forEach(d => resultado[d] = { mediaW: grupos[d].somaW / grupos[d].count, kwh: grupos[d].kwh });
+  return resultado;
+}
+
+function atualizarPico(leiturasHoje) {
+  if (leiturasHoje.length === 0) { document.getElementById('peakBanner').classList.remove('show'); return; }
+  const pico = leiturasHoje.reduce((max, r) => r.power_w > max.power_w ? r : max, leiturasHoje[0]);
+  document.getElementById('peakValue').textContent = `${pico.power_w.toFixed(0)} W`;
+  document.getElementById('peakTime').textContent = formatarHora(pico.created_at);
+  document.getElementById('peakBanner').classList.add('show');
+}
+
+async function atualizarGraficoDia() {
+  const leituras = await carregarPeriodo(1);
+  chartDia.data.labels = leituras.map(r => formatarHora(r.created_at));
+  chartDia.data.datasets[0].data = leituras.map(r => r.power_w);
+  chartDia.update();
+  ultimoKwhHoje = estimarKwh(leituras, INTERVALO_LEITURA_SEGUNDOS);
+  document.getElementById('todayTotal').textContent = `${ultimoKwhHoje.toFixed(2)} kWh`;
+  atualizarGaugeCusto();
+  atualizarPico(leituras);
+}
+
+async function atualizarGraficoSemana() {
+  const leituras = await carregarPeriodo(7);
+  const porDia = agruparPorDia(leituras);
+  chartSemana.data.labels = Object.keys(porDia).map(formatarDia);
+  chartSemana.data.datasets[0].data = Object.values(porDia).map(v => v.mediaW);
+  chartSemana.update();
+  document.getElementById('weekTotal').textContent = `${Object.values(porDia).reduce((a, v) => a + v.kwh, 0).toFixed(2)} kWh`;
+}
+
+async function atualizarGraficoMes() {
+  const leituras = await carregarPeriodo(30);
+  const porDia = agruparPorDia(leituras);
+  chartMes.data.labels = Object.keys(porDia).map(formatarDia);
+  chartMes.data.datasets[0].data = Object.values(porDia).map(v => v.mediaW);
+  chartMes.update();
+  document.getElementById('monthTotal').textContent = `${Object.values(porDia).reduce((a, v) => a + v.kwh, 0).toFixed(2)} kWh`;
+}
+
+// Consumo dos últimos 12 meses — usa a tabela "consumo_diario" (resumo permanente),
+// que continua tendo dado mesmo depois que a leitura bruta de 90+ dias já foi apagada
+async function atualizarGraficoAno() {
+  const desde = new Date();
+  desde.setMonth(desde.getMonth() - 12);
+
+  const { data, error } = await supabase
+    .from('consumo_diario')
+    .select('data, kwh_total')
+    .eq('device_id', DEVICE_ID)
+    .gte('data', desde.toISOString().split('T')[0])
+    .order('data', { ascending: true });
+
+  if (error || !data) {
+    document.getElementById('yearTotal').textContent = '-- kWh';
+    return;
+  }
+
+  // Agrupa por mês (ex: "2026-07")
+  const porMes = {};
+  data.forEach(d => {
+    const mesChave = d.data.slice(0, 7); // "AAAA-MM"
+    if (!porMes[mesChave]) porMes[mesChave] = 0;
+    porMes[mesChave] += parseFloat(d.kwh_total);
+  });
+
+  const chaves = Object.keys(porMes).sort();
+  const labelsMes = chaves.map(m => {
+    const [ano, mes] = m.split('-');
+    return new Date(ano, mes - 1).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+  });
+
+  chartAno.data.labels = labelsMes;
+  chartAno.data.datasets[0].data = chaves.map(m => porMes[m]);
+  chartAno.update();
+
+  const totalAno = Object.values(porMes).reduce((a, v) => a + v, 0);
+  document.getElementById('yearTotal').textContent = `${totalAno.toFixed(2)} kWh`;
+}
+
+async function atualizarTudo() {
+  if (deviceMeta.tipo_instalacao === 'residencial' && !deviceMeta._carregado) {
+    await carregarMetaDispositivo();
+    deviceMeta._carregado = true;
+  }
+  await carregarUltimaLeitura();
+  await atualizarGraficoDia();
+  await atualizarGraficoSemana();
+  await atualizarGraficoMes();
+  await atualizarGraficoAno();
+}
+
+// ------------------------------------------------------------
+// Exportar / Compartilhar gráficos
+// ------------------------------------------------------------
+const chartsPorId = { chartDia, chartSemana, chartMes, chartAno };
+
+function gerarImagemComFundo(chartId) {
+  // Gera uma cópia do gráfico com fundo escuro sólido (o canvas puro é transparente,
+  // o que fica ruim se compartilhar em app que mostra fundo branco)
+  const chart = chartsPorId[chartId];
+  const canvasOriginal = document.getElementById(chartId);
+
+  const canvasFinal = document.createElement('canvas');
+  canvasFinal.width = canvasOriginal.width;
+  canvasFinal.height = canvasOriginal.height;
+  const ctx = canvasFinal.getContext('2d');
+
+  ctx.fillStyle = '#101a17';
+  ctx.fillRect(0, 0, canvasFinal.width, canvasFinal.height);
+  ctx.drawImage(canvasOriginal, 0, 0);
+
+  return canvasFinal;
+}
+
+function exportarGrafico(chartId, nomeArquivo) {
+  const canvas = gerarImagemComFundo(chartId);
+  const link = document.createElement('a');
+  link.download = `medeluz-${nomeArquivo}-${new Date().toISOString().split('T')[0]}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+async function compartilharGrafico(chartId, nomeArquivo) {
+  const canvas = gerarImagemComFundo(chartId);
+
+  canvas.toBlob(async (blob) => {
+    const arquivo = new File([blob], `medeluz-${nomeArquivo}.png`, { type: 'image/png' });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+      try {
+        await navigator.share({
+          files: [arquivo],
+          title: 'Meu consumo de energia — MedeLuz',
+          text: 'Veja meu gráfico de consumo de energia gerado pelo MedeLuz'
+        });
+      } catch (e) {
+        // usuário cancelou o compartilhamento, sem problema
+      }
+    } else {
+      // navegador não suporta compartilhar arquivo (ex: desktop) — baixa a imagem como alternativa
+      exportarGrafico(chartId, nomeArquivo);
+      alert('Compartilhamento direto não é suportado nesse navegador — a imagem foi baixada, é só anexar manualmente.');
+    }
+  }, 'image/png');
+}
+
+atualizarTudo();
+setInterval(atualizarTudo, 15000); // busca dado novo a cada 15s, acompanhando o intervalo do ESP32
+</script>
+
+</body>
+</html>
